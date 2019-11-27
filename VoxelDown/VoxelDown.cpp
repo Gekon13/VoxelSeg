@@ -21,11 +21,9 @@ main(int argc, char** argv)
 {
 	
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
 
 	// Fill in the cloud data
 	pcl::PCDReader reader;
-	// Replace the path below with the path where you saved your file
 	pcl::console::print_highlight("Loading point cloud...\n");
 	if (reader.read(argv[1], *cloud))
 	{
@@ -33,39 +31,39 @@ main(int argc, char** argv)
 		return (1);
 	}
 
-	std::cerr << "PointCloud size: " << cloud->width * cloud->height << " data points." << endl;
+	std::cerr << "PointCloud size: " << cloud->width * cloud->height << endl;
 
 	pcl::VoxelGridCovariance<pcl::PointXYZ> sor;
 	sor.setInputCloud(cloud);
 	sor.setLeafSize(0.04f, 0.04f, 0.04f);
+	sor.setMinPointPerVoxel(3);
 	sor.filter();
-	std::cerr << "VoxelGrid size: " << sor.getLeaves().size() << " leafs." << endl;
+	std::cerr << "Generated leaves: " << sor.getLeaves().size() << endl; 
+	std::cerr << "Generated voxels: " << sor.getCentroids()->width * sor.getCentroids()->height << endl;
+	/*
+	When we generate a voxel grid in PCL, "leaf" is every voxel-space made by the grid. 
+	Using getLeaves() will get us all voxels, including non-filtered ones with less than 3 points inside.
+	getCentroids() gives us a point-cloud of centroids created by the filter.
+	*/
 
-	map<size_t, pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf> allVoxels = sor.getLeaves();
-	map<size_t, pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf>::iterator it = allVoxels.begin();
-	float helper;
+	float linearity;
+	pcl::PointCloud<pcl::PointXYZ>::iterator it = cloud->begin();
+	ofstream outfile;
+	outfile.open("text.txt");
 
-	for (it; it != allVoxels.end(); it++)
+	/*
+	Below is naive way of calculating features. We calculate voxel's feature for each point, so it's slow.
+	*/
+	for (it; it != cloud->end(); it++)
 	{
-		
-		//linearity
-		helper = (it->second.getEvals()[0] - it->second.getEvals()[1]) / it->second.getEvals()[0];
-
-		cout << it->second.getEvals() << endl;
-		cout << "Linearity: " << helper << endl;
-		cout << "" << endl;
-
-		/*
-		ofstream outfile;
-		outfile.open("text.txt");
-		for (int i = 0; i < 3; i++)
+		if (sor.getLeaf(*it)->getPointCount() > 2)
 		{
-			outfile << it->second.getEvals()[i] << ", " << endl;
+			linearity = (sor.getLeaf(*it)->getEvals()[0] - sor.getLeaf(*it)->getEvals()[1]) / sor.getLeaf(*it)->getEvals()[0];
+			outfile << it->x << ", " << it->y << ", " << it->z << ", " << linearity << endl;
 		}
-		*/
-		
-		
-
 	}
+
+	outfile.close();
+
 	return (0);
 }
