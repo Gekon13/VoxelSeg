@@ -2,9 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <map>
 #include <iterator>
-#include <unordered_map>
 
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
@@ -53,8 +51,42 @@ inline float sumOfEigenvalues(const pcl::VoxelGridCovariance<pcl::PointXYZ>::Lea
 	return leaf->getEvals()[0] + leaf->getEvals()[1] + leaf->getEvals()[2];
 }
 
+vector<string> makeColor(vector<float> featuresVector)
+{
+	float minimum = *min_element(featuresVector.begin(), featuresVector.end());
+	float maximum = *max_element(featuresVector.begin(), featuresVector.end());
+
+	float range = maximum - minimum;
+	float min = minimum;
+	vector<string> colors;
+	int red, grn, blu;
+
+	for (int i = 0; i < int(featuresVector.size()); i++)
+	{
+		red = 255 * ((featuresVector[i] - minimum) / range);
+		blu = 255 - (255 * (featuresVector[i] - minimum) / range);
+		grn = 0;
+		colors.push_back(to_string(red) + ", " + to_string(grn) + ", " + to_string(blu));
+	}
+
+	return colors;
+}
+
 int main(int argc, char** argv)
 {
+	/*if (argc < 2)
+	{
+		pcl::console::print_error("Syntax is: %s <pcd-file> \n "
+			"-all Calculates all features. \n"
+			"-pla Calculates planarity. \n"
+			"-sph Calculates sphericity. \n"
+			"-omn Calculates omnivariance. \n"
+			"-ani Calculates anisotropy. \n"
+			"-eig Calculates eigenentropy. \n"
+			"-sum Calculates sum of Eigenvalues. \n", argv[0]);
+		return (1);
+	}*/
+
 	clock_t t1, t2;
 
 	t1 = clock();
@@ -69,8 +101,9 @@ int main(int argc, char** argv)
 		pcl::console::print_error("Error loading cloud file!\n");
 		return (1);
 	}
+	pcl::console::print_highlight("Point cloud loaded. \n");
 
-	std::cerr << "PointCloud size: " << cloud->width * cloud->height << endl;
+	std::cerr << "PointCloud size: " << cloud->width * cloud->height << " points." << endl;
 
 	pcl::VoxelGridCovariance<pcl::PointXYZ> sor;
 	sor.setInputCloud(cloud);
@@ -85,11 +118,11 @@ int main(int argc, char** argv)
 	getCentroids() gives us a point-cloud of centroids created by the filter.
 	*/
 
-	pcl::PointCloud<pcl::PointXYZ>::iterator it = cloud->begin();
+	//initialize all ofstreams
 	ofstream linearityFile, planarityFile, sphericityFile, omnivarianceFile, anisotropyFile, eigenentropyFile, sumOfEigenvaluesFile;
-	ofstream *textFiles[] = { &linearityFile, &planarityFile, &sphericityFile, &omnivarianceFile, &anisotropyFile, &eigenentropyFile, &sumOfEigenvaluesFile };
-	featureCalculation features[] = { linearity, planarity, sphericity, omnivariance, anisotropy, eigenentropy, sumOfEigenvalues };
-	string fileSuffix[] = { "linearity", "planarity", "sphericity", "omnivariance", "anisotropy", "eigenentropy", "sumOfEigenvalues" };
+	ofstream *textFiles[7] = { &linearityFile, &planarityFile, &sphericityFile, &omnivarianceFile, &anisotropyFile, &eigenentropyFile, &sumOfEigenvaluesFile };
+	featureCalculation features[7] = { linearity, planarity, sphericity, omnivariance, anisotropy, eigenentropy, sumOfEigenvalues };
+	string fileSuffix[7] = { "linearity", "planarity", "sphericity", "omnivariance", "anisotropy", "eigenentropy", "sumOfEigenvalues" };
 
 	vector<const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf *> calculatedVoxels;
 	vector<float> calculatedFeatures[7];
@@ -104,20 +137,14 @@ int main(int argc, char** argv)
 	vector<pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf *>::iterator::difference_type position;
 	float feature;
 
-	for (it; it != cloud->end(); it++)
+	//calculate features for every voxel with 3 or more points inside
+	pcl::PointCloud<pcl::PointXYZ>::iterator it = cloud->begin();
+
+	for(it; it < cloud->end(); it++)
 	{
 		if (sor.getLeaf(*it)->getPointCount() > 2)
 		{
-			helper = find(calculatedVoxels.begin(), calculatedVoxels.end(), sor.getLeaf(*it));
-			if (helper != calculatedVoxels.end())
-			{
-				position = distance(calculatedVoxels.begin(), helper);
-				for (int i = 0; i < 7; i++)
-				{
-					*textFiles[i] << it->x << ", " << it->y << ", " << it->z << ", " << calculatedFeatures[i].at(position) << endl;
-				}
-			}
-			else
+			if (find(calculatedVoxels.begin(), calculatedVoxels.end(), sor.getLeaf(*it)) == calculatedVoxels.end())
 			{
 				calculatedVoxels.push_back(sor.getLeaf(*it));
 
@@ -125,11 +152,34 @@ int main(int argc, char** argv)
 				{
 					feature = features[i](sor.getLeaf(*it));
 					calculatedFeatures[i].push_back(feature);
-					*textFiles[i] << it->x << ", " << it->y << ", " << it->z << ", " << feature << endl;
 				}
-			}			
+			}
 		}
 	}
+
+	//Transform calculated features into colours
+	vector<string> calculatedColors[7];
+	for (int i = 0; i < 7; i++)
+	{
+		calculatedColors[i] = makeColor(calculatedFeatures[i]);
+	}
+
+	//save points and their colors to text files
+	pcl::PointCloud<pcl::PointXYZ>::iterator pit = cloud->begin();
+	for (pit; pit != cloud->end(); pit++)
+	{
+		if (sor.getLeaf(*pit)->getPointCount() > 2)
+		{
+			helper = find(calculatedVoxels.begin(), calculatedVoxels.end(), sor.getLeaf(*pit));
+			position = distance(calculatedVoxels.begin(), helper);
+			for (int i = 0; i < 7; i++)
+			{
+				*textFiles[i] << pit->x << ", " << pit->y << ", " << pit->z << ", " << calculatedColors[i].at(position) << endl;
+			}
+			calculatedVoxels.push_back(sor.getLeaf(*pit));
+		}
+	}
+
 
 	//close all ofstreams
 	for (int i = 0; i < 7; i++)
