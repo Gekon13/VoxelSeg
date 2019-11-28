@@ -11,6 +11,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/voxel_grid_covariance.h>
 #include <pcl/point_cloud.h>
+#include <time.h>
 
 using namespace std;
 using namespace Eigen;
@@ -54,6 +55,9 @@ inline float sumOfEigenvalues(const pcl::VoxelGridCovariance<pcl::PointXYZ>::Lea
 
 int main(int argc, char** argv)
 {
+	clock_t t1, t2;
+
+	t1 = clock();
 
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
 
@@ -87,23 +91,43 @@ int main(int argc, char** argv)
 	featureCalculation features[] = { linearity, planarity, sphericity, omnivariance, anisotropy, eigenentropy, sumOfEigenvalues };
 	string fileSuffix[] = { "linearity", "planarity", "sphericity", "omnivariance", "anisotropy", "eigenentropy", "sumOfEigenvalues" };
 
+	vector<const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf *> calculatedVoxels;
+	vector<float> calculatedFeatures[7];
+
 	//open all ofstreams and create text files
 	for (int i = 0; i < 7; i++)
 	{
 		textFiles[i]->open(string(argv[1]) + "_" + fileSuffix[i] + ".txt");
 	}
 
-	/*
-	Below is naive way of calculating features. We calculate each feature for each point.
-	*/
+	vector<const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf *>::iterator helper;
+	vector<pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf *>::iterator::difference_type position;
+	float feature;
+
 	for (it; it != cloud->end(); it++)
 	{
 		if (sor.getLeaf(*it)->getPointCount() > 2)
 		{
-			for (int i = 0; i < 7; i++)
+			helper = find(calculatedVoxels.begin(), calculatedVoxels.end(), sor.getLeaf(*it));
+			if (helper != calculatedVoxels.end())
 			{
-				*textFiles[i] << it->x << ", " << it->y << ", " << it->z << ", " << features[i](sor.getLeaf(*it)) << endl;
+				position = distance(calculatedVoxels.begin(), helper);
+				for (int i = 0; i < 7; i++)
+				{
+					*textFiles[i] << it->x << ", " << it->y << ", " << it->z << ", " << calculatedFeatures[i].at(position) << endl;
+				}
 			}
+			else
+			{
+				calculatedVoxels.push_back(sor.getLeaf(*it));
+
+				for (int i = 0; i < 7; i++)
+				{
+					feature = features[i](sor.getLeaf(*it));
+					calculatedFeatures[i].push_back(feature);
+					*textFiles[i] << it->x << ", " << it->y << ", " << it->z << ", " << feature << endl;
+				}
+			}			
 		}
 	}
 
@@ -113,5 +137,9 @@ int main(int argc, char** argv)
 		textFiles[i]->close();
 	}
 
+	t2 = clock();
+	float diff((float)t2 - (float)t1);
+	cout << "Execution time: " << diff/1000 << "s." << endl;
+	system("pause");
 	return (0);
 }
