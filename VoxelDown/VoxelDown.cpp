@@ -14,41 +14,41 @@
 using namespace std;
 using namespace Eigen;
 
-typedef float (*featureCalculation) (const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf * leaf);
+typedef float (*featureCalculation) (const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf * leaf);
 
-inline float linearity(const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf * leaf)
+inline float linearity(const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf * leaf)
 {
-	return (leaf->getEvals()[0] - leaf->getEvals()[1])/ leaf->getEvals()[0];
+	return (leaf->getEvals()[2] - leaf->getEvals()[1])/ leaf->getEvals()[2];
 }
 
-inline float planarity(const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf * leaf)
+inline float planarity(const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf * leaf)
 {
-	return (leaf->getEvals()[1] - leaf->getEvals()[2]) / leaf->getEvals()[0];
+	return (leaf->getEvals()[1] - leaf->getEvals()[0]) / leaf->getEvals()[2];
 }
 
-inline float sphericity(const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf * leaf)
+inline float sphericity(const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf * leaf)
 {
-	return (leaf->getEvals()[2]) / leaf->getEvals()[0];
+	return (leaf->getEvals()[0]) / leaf->getEvals()[2];
 }
 
-inline float omnivariance(const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf * leaf)
+inline float omnivariance(const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf * leaf)
 {
-	return pow(leaf->getEvals()[0] * leaf->getEvals()[1] * leaf->getEvals()[2], 3);
+	return pow(leaf->getEvals()[2] * leaf->getEvals()[1] * leaf->getEvals()[0], 3);
 }
 
-inline float anisotropy(const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf * leaf)
+inline float anisotropy(const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf * leaf)
 {
-	return (leaf->getEvals()[0] - leaf->getEvals()[2]) / leaf->getEvals()[0];
+	return (leaf->getEvals()[2] - leaf->getEvals()[0]) / leaf->getEvals()[2];
 }
 
-inline float eigenentropy(const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf * leaf)
+inline float eigenentropy(const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf * leaf)
 {
-	return -1 * (leaf->getEvals()[0] * log(leaf->getEvals()[0]) + leaf->getEvals()[1] * log(leaf->getEvals()[1]) + leaf->getEvals()[2] * log(leaf->getEvals()[2]));
+	return -1 * (leaf->getEvals()[2] * log(leaf->getEvals()[2]) + leaf->getEvals()[1] * log(leaf->getEvals()[1]) + leaf->getEvals()[0] * log(leaf->getEvals()[0]));
 }
 
-inline float sumOfEigenvalues(const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf * leaf)
+inline float sumOfEigenvalues(const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf * leaf)
 {
-	return leaf->getEvals()[0] + leaf->getEvals()[1] + leaf->getEvals()[2];
+	return leaf->getEvals()[2] + leaf->getEvals()[1] + leaf->getEvals()[0];
 }
 
 vector<string> makeColor(vector<float> featuresVector)
@@ -91,7 +91,7 @@ int main(int argc, char** argv)
 
 	t1 = clock();
 
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
 
 	// Fill in the cloud data
 	pcl::PCDReader reader;
@@ -105,7 +105,7 @@ int main(int argc, char** argv)
 
 	std::cerr << "PointCloud size: " << cloud->width * cloud->height << " points." << endl;
 
-	pcl::VoxelGridCovariance<pcl::PointXYZ> sor;
+	pcl::VoxelGridCovariance<pcl::PointXYZRGBA> sor;
 	sor.setInputCloud(cloud);
 	sor.setLeafSize(0.04f, 0.04f, 0.04f);
 	sor.setMinPointPerVoxel(3);
@@ -124,7 +124,7 @@ int main(int argc, char** argv)
 	featureCalculation features[7] = { linearity, planarity, sphericity, omnivariance, anisotropy, eigenentropy, sumOfEigenvalues };
 	string fileSuffix[7] = { "linearity", "planarity", "sphericity", "omnivariance", "anisotropy", "eigenentropy", "sumOfEigenvalues" };
 
-	vector<const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf *> calculatedVoxels;
+	vector<const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf *> calculatedVoxels;
 	vector<float> calculatedFeatures[7];
 
 	//open all ofstreams and create text files
@@ -133,15 +133,16 @@ int main(int argc, char** argv)
 		textFiles[i]->open(string(argv[1]) + "_" + fileSuffix[i] + ".txt");
 	}
 
-	vector<const pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf *>::iterator helper;
-	vector<pcl::VoxelGridCovariance<pcl::PointXYZ>::Leaf *>::iterator::difference_type position;
+	vector<const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf *>::iterator helper;
+	vector<pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf *>::iterator::difference_type position;
 	float feature;
 
 	//calculate features for every voxel with 3 or more points inside
-	pcl::PointCloud<pcl::PointXYZ>::iterator it = cloud->begin();
+	pcl::PointCloud<pcl::PointXYZRGBA>::iterator it = cloud->begin();
 
 	for(it; it < cloud->end(); it++)
 	{
+		std::cerr << "Generated voxels: " << it->x << " " << it->y << " " << it->z << endl;
 		if (sor.getLeaf(*it)->getPointCount() > 2)
 		{
 			if (find(calculatedVoxels.begin(), calculatedVoxels.end(), sor.getLeaf(*it)) == calculatedVoxels.end())
@@ -158,14 +159,16 @@ int main(int argc, char** argv)
 	}
 
 	//Transform calculated features into colours
+	/*
 	vector<string> calculatedColors[7];
 	for (int i = 0; i < 7; i++)
 	{
 		calculatedColors[i] = makeColor(calculatedFeatures[i]);
 	}
+	*/
 
-	//save points and their colors to text files
-	pcl::PointCloud<pcl::PointXYZ>::iterator pit = cloud->begin();
+	//save points and their features to text files
+	pcl::PointCloud<pcl::PointXYZRGBA>::iterator pit = cloud->begin();
 	for (pit; pit != cloud->end(); pit++)
 	{
 		if (sor.getLeaf(*pit)->getPointCount() > 2)
@@ -174,7 +177,7 @@ int main(int argc, char** argv)
 			position = distance(calculatedVoxels.begin(), helper);
 			for (int i = 0; i < 7; i++)
 			{
-				*textFiles[i] << pit->x << ", " << pit->y << ", " << pit->z << ", " << calculatedColors[i].at(position) << endl;
+				*textFiles[i] << pit->x << ", " << pit->y << ", " << pit->z << ", " << calculatedFeatures[i].at(position) << endl;
 			}
 			calculatedVoxels.push_back(sor.getLeaf(*pit));
 		}
