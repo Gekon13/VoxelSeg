@@ -33,7 +33,7 @@ inline float sphericity(const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf 
 
 inline float omnivariance(const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf * leaf)
 {
-	return pow(leaf->getEvals()[2] * leaf->getEvals()[1] * leaf->getEvals()[0], 3);
+	return pow(leaf->getEvals()[2] * leaf->getEvals()[1] * leaf->getEvals()[0], 1/3);
 }
 
 inline float anisotropy(const pcl::VoxelGridCovariance<pcl::PointXYZRGBA>::Leaf * leaf)
